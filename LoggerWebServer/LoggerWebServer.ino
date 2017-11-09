@@ -202,7 +202,7 @@ void loop() {
             // File was opened, now print out data character by character until at the
             // end of the file.
             Serial.println("Opened file, printing contents below:");
-            int nbytes     = min(dataFile.available(),FLASH_READ_BUFFER_SIZE);
+            int nbytes     = min(dataFile.available(),FLASH_READ_BUFFER_SIZE - 1); //leave room for null terminator
             while (nbytes) {
               // Use the read function to read into buffer
               dataFile.read(flash_read_buffer, nbytes);
@@ -210,7 +210,7 @@ void loop() {
               flash_read_buffer[nbytes] = 0;
               //Serial.print(c);
               client.print(flash_read_buffer);
-              nbytes     = min(dataFile.available(),FLASH_READ_BUFFER_SIZE);
+              nbytes     = min(dataFile.available(),FLASH_READ_BUFFER_SIZE - 1);   //leave room for null terminator
             }
           }
           else {
