@@ -206,46 +206,56 @@ void loop() {
     if (access_point_connected){
       WiFiClient client = server.available();   // listen for incoming clients
       if (client) {                             // if you get a client,
-        Serial.println(F("new client:"));    // print a message out the serial port
+        Serial.println(F("\nnew client:"));
         char request_buffer[1024];           // make a buffer to hold the request
         //pause a bit to allow buffers to fill
         delay(100);
+        Serial.print(F("  bytes available: "));Serial.println(client.available());
         int nbytes = min(client.available(),READ_BUFFER_SIZE - 1);  //leave room for null terminator
-        nbytes = client.readBytesUntil('\n', read_buffer, nbytes);  //read into buffer
-        read_buffer[nbytes] = 0;             //add null terminator
-        strcpy(request_buffer, read_buffer); //save the request line
-        Serial.print(F("  request: "));Serial.println(request_buffer);
-        //readout and discard headers
-        Serial.println(F("  headers:"));
-        while(true) {
-          nbytes = min(client.available(),READ_BUFFER_SIZE - 1);      //leave room for null terminator
-          if (nbytes == 0){ break;}
-          nbytes = client.readBytesUntil('\n', read_buffer, nbytes);  //read into buffer
-          read_buffer[nbytes] = 0; //add null terminator
-          Serial.print(F("    "));Serial.println(read_buffer);
-        }
-        //parse the request
-        char *p;
-        //  1st strtok iteration
-        p = strtok(request_buffer," ");
-        if (strcmp(p,"GET") == 0){
-          //  2nd strtok iteration
-          p = strtok(NULL," ");
-          if (strcmp(p,"/") == 0){
-            Serial.println(F("displaying HTML for path '/': "));
-            displayHTML_MAIN(client);
-          } else if (strcmp(p,"/DATA") == 0){
-            fetchDATA_CSV(client);
-          } else if (strcmp(p,"/SET_TIME") == 0){
-            Serial.println(F("WARNING: path 'SET_TIME' not yet implemented!"));
-            displayHTML_MAIN(client);
-          }
-          else{
-            Serial.print(F("WARNING: invalid path: "));Serial.println(p);
-          }
+        if (nbytes == 0){
+          Serial.println(F("WARNING: ignoring empty request!"));
+          client.print(F("HTTP/1.1 400 Bad Request"));
         } else{
-          Serial.print(F("WARNING: unhandled HTTP request command: "));Serial.println(p);
+          nbytes = client.readBytesUntil('\n', read_buffer, nbytes);  //read into buffer
+          read_buffer[nbytes] = 0;             //add null terminator
+          strcpy(request_buffer, read_buffer); //save the request line
+          Serial.print(F("  request: "));Serial.println(request_buffer);
+          //readout and discard headers
+          Serial.println(F("  headers:"));
+          while(true) {
+            nbytes = min(client.available(),READ_BUFFER_SIZE - 1);      //leave room for null terminator
+            if (nbytes == 0){ break;}
+            nbytes = client.readBytesUntil('\n', read_buffer, nbytes);  //read into buffer
+            read_buffer[nbytes] = 0; //add null terminator
+            Serial.print(F("    "));Serial.println(read_buffer);
+          }
+          //parse the request
+          char *p;
+          //  1st strtok iteration
+          p = strtok(request_buffer," ");
+          if (strcmp(p,"GET") == 0){
+            //  2nd strtok iteration
+            p = strtok(NULL," ");
+            if (strcmp(p,"/") == 0){
+              Serial.println(F("displaying HTML for path '/': "));
+              displayHTML_MAIN(client);
+            } else if (strcmp(p,"/DATA") == 0){
+              fetchDATA_CSV(client);
+            } else if (strcmp(p,"/SET_TIME") == 0){
+              Serial.println(F("WARNING: path 'SET_TIME' not yet implemented!"));
+              displayHTML_MAIN(client);
+            }
+            else{
+              Serial.print(F("WARNING: invalid path: "));Serial.println(p);
+              client.print(F("HTTP/1.1 404 Not Found"));
+            }
+          } else{
+            Serial.print(F("WARNING: unhandled HTTP request command: "));Serial.println(p);
+            client.print(F("HTTP/1.1 400 Bad Request"));
+          }
         }
+        // The HTTP response ends with another blank line:
+        client.println();
         // close the connection:
         client.stop();
         Serial.println(F("client disconnected"));
@@ -287,20 +297,20 @@ void printWiFiStatus() {
 
 }
 
-String fetchRTCTimeStamp(){
-  String ts = "";
-  ts += rtc.getYear();
-  ts += "-";
-  ts += rtc.getMonth();
-  ts += "-";
-  ts += rtc.getDay();
-  ts += " ";
-  ts += rtc.getHours();
-  ts += ":";
-  ts += rtc.getMinutes();
-  ts += ":";
-  ts += rtc.getSeconds();
-  return ts;
+void fetchRTCTimeStamp(char *buf){
+  buf[0] = 0;
+  char numstr[8];
+  strcat(buf,itoa(rtc.getYear(),numstr,10));
+  strcat(buf,"-");
+  strcat(buf,itoa(rtc.getMonth(),numstr,10));
+  strcat(buf,"-");
+  strcat(buf,itoa(rtc.getDay(),numstr,10));
+  strcat(buf," ");
+  strcat(buf,itoa(rtc.getHours(),numstr,10));
+  strcat(buf,":");
+  strcat(buf,itoa(rtc.getMinutes(),numstr,10));
+  strcat(buf,":");
+  strcat(buf,itoa(rtc.getSeconds(),numstr,10));
 }
 
 void displayHTML_MAIN(WiFiClient client){
@@ -313,7 +323,9 @@ void displayHTML_MAIN(WiFiClient client){
   // the content of the HTTP response follows the header:
   client.print(F("<!doctype html>\n<html lang=\"en-US\">\n<head>\n"));
   client.print(F("<div>RTC Time: "));
-  client.print(fetchRTCTimeStamp());
+  char ts[20];
+  fetchRTCTimeStamp(ts);
+  client.print(ts);
   client.print(F("&nbsp;<span><a href=\"/SET_TIME\">SET TIME</a></span></div>\n"));
   client.print(F("<div><a href=\"/DATA\">FETCH DATA</a></div>\n"));
   client.print(F("</body>\n</html>\n"));
